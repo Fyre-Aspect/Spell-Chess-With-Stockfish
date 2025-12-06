@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Board, Color, Move, Square, Piece } from '@/lib/chess/types';
+import { Board, Color, Move, Square, Piece, CastlingRights } from '@/lib/chess/types';
 import { initialBoard, boardToFen, fenToBoard } from '@/lib/chess/board';
 import { getLegalMoves, makeMove, isCheckmate, isCheck, isSameSquare } from '@/lib/chess/rules';
 
@@ -10,6 +10,10 @@ export function useChessGame() {
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [gameStatus, setGameStatus] = useState<'playing' | 'checkmate' | 'stalemate'>('playing');
   const [history, setHistory] = useState<Move[]>([]);
+  const [castlingRights, setCastlingRights] = useState<CastlingRights>({
+    w: { k: true, q: true },
+    b: { k: true, q: true }
+  });
 
   const executeMove = useCallback((move: Move) => {
     setBoard(prevBoard => {
@@ -23,12 +27,34 @@ export function useChessGame() {
       
       return newBoard;
     });
+
+    // Update castling rights
+    setCastlingRights(prev => {
+      const newRights = { ...prev, w: { ...prev.w }, b: { ...prev.b } };
+      const piece = board[move.from.row][move.from.col];
+      
+      if (piece?.type === 'k') {
+        newRights[piece.color] = { k: false, q: false };
+      } else if (piece?.type === 'r') {
+        if (move.from.col === 0) newRights[piece.color].q = false;
+        if (move.from.col === 7) newRights[piece.color].k = false;
+      }
+      
+      // Also if rook is captured
+      const targetPiece = board[move.to.row][move.to.col];
+      if (targetPiece?.type === 'r') {
+         if (move.to.col === 0) newRights[targetPiece.color].q = false;
+         if (move.to.col === 7) newRights[targetPiece.color].k = false;
+      }
+
+      return newRights;
+    });
     
     setTurn(prev => prev === 'w' ? 'b' : 'w');
     setHistory(prev => [...prev, move]);
     setSelectedSquare(null);
     setLegalMoves([]);
-  }, [turn]);
+  }, [turn, board]);
 
   const handleSquareClick = useCallback((row: number, col: number) => {
     if (gameStatus !== 'playing') return;
@@ -47,7 +73,9 @@ export function useChessGame() {
 
       // If clicking a legal move target, make the move
       if (legalMoves.some(m => isSameSquare(m, clickedSquare))) {
-        const move: Move = { from: selectedSquare, to: clickedSquare };
+        const selectedPiece = board[selectedSquare.row][selectedSquare.col];
+        const isCastling = selectedPiece?.type === 'k' && Math.abs(clickedSquare.col - selectedSquare.col) > 1;
+        const move: Move = { from: selectedSquare, to: clickedSquare, isCastling };
         executeMove(move);
         return;
       }
@@ -55,7 +83,7 @@ export function useChessGame() {
       // If clicking another own piece, select it instead
       if (piece && piece.color === turn) {
         setSelectedSquare(clickedSquare);
-        setLegalMoves(getLegalMoves(board, clickedSquare));
+        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights));
         return;
       }
 
@@ -66,10 +94,10 @@ export function useChessGame() {
       // If no square selected, select own piece
       if (piece && piece.color === turn) {
         setSelectedSquare(clickedSquare);
-        setLegalMoves(getLegalMoves(board, clickedSquare));
+        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights));
       }
     }
-  }, [board, turn, selectedSquare, legalMoves, gameStatus, executeMove]);
+  }, [board, turn, selectedSquare, legalMoves, gameStatus, executeMove, castlingRights]);
 
   const resetGame = useCallback(() => {
     setBoard(initialBoard);
@@ -78,6 +106,7 @@ export function useChessGame() {
     setLegalMoves([]);
     setGameStatus('playing');
     setHistory([]);
+    setCastlingRights({ w: { k: true, q: true }, b: { k: true, q: true } });
   }, []);
 
   return {
@@ -89,6 +118,7 @@ export function useChessGame() {
     handleSquareClick,
     executeMove,
     resetGame,
-    history
+    history,
+    castlingRights
   };
 }

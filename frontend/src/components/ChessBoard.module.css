@@ -3,7 +3,6 @@
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
   width: 100%;
-  max-width: 800px;
   aspect-ratio: 1;
   border: 8px solid #2c2c2c;
   box-sizing: border-box;

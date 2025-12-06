@@ -3,16 +3,61 @@
 import React, { useEffect, useState } from 'react';
 import { useChessGame } from '@/hooks/useChessGame';
 import ChessBoard from './ChessBoard';
+import EvaluationBar from './EvaluationBar';
 import { boardToFen, uciToMove } from '@/lib/chess/board';
 
 type GameMode = 'menu' | 'pvp' | 'ai';
 
 export default function GameController() {
-  const { board, turn, selectedSquare, legalMoves, gameStatus, handleSquareClick, executeMove, resetGame } = useChessGame();
+  const { board, turn, selectedSquare, legalMoves, gameStatus, handleSquareClick, executeMove, resetGame, castlingRights } = useChessGame();
   const [gameMode, setGameMode] = useState<GameMode>('menu');
   const [difficulty, setDifficulty] = useState(10);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [evaluation, setEvaluation] = useState<number | null>(null);
+  const [mate, setMate] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((e) => {
+        console.error(`Error attempting to enable full-screen mode: ${e.message} (${e.name})`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  // Fetch evaluation for player's turn or PvP
+  useEffect(() => {
+    const isAiTurn = gameMode === 'ai' && turn === 'b';
+    if (!isAiTurn && gameStatus === 'playing') {
+       const getEval = async () => {
+         try {
+           const fen = boardToFen(board, turn, castlingRights);
+           const response = await fetch(`/api/move?fen=${encodeURIComponent(fen)}&depth=10`);
+           const data = await response.json();
+           if (data.success) {
+             setEvaluation(data.evaluation);
+             setMate(data.mate);
+           }
+         } catch (e) {
+           console.error("Eval fetch failed", e);
+         }
+       };
+       getEval();
+    }
+  }, [board, turn, castlingRights, gameStatus, gameMode]);
 
   useEffect(() => {
     if (gameMode === 'ai' && turn === 'b' && gameStatus === 'playing') {
@@ -20,7 +65,7 @@ export default function GameController() {
         setIsAiThinking(true);
         setError(null);
         try {
-          const fen = boardToFen(board, 'b');
+          const fen = boardToFen(board, 'b', castlingRights);
           const response = await fetch(`/api/move?fen=${encodeURIComponent(fen)}&depth=${difficulty}`);
           
           if (!response.ok) {
@@ -29,6 +74,11 @@ export default function GameController() {
 
           const data = await response.json();
           
+          if (data.success) {
+             setEvaluation(data.evaluation);
+             setMate(data.mate);
+          }
+
           if (data.success && data.bestmove) {
              const bestMoveStr = data.bestmove;
              const moveStr = bestMoveStr.startsWith('bestmove') ? bestMoveStr.split(' ')[1] : bestMoveStr;
@@ -49,11 +99,13 @@ export default function GameController() {
       };
       makeAiMove();
     }
-  }, [turn, gameStatus, board, executeMove, gameMode, difficulty]);
+  }, [turn, gameStatus, board, executeMove, gameMode, difficulty, castlingRights]);
 
   const handleStartGame = (mode: GameMode) => {
     setGameMode(mode);
     resetGame();
+    setEvaluation(0); // Reset eval
+    setMate(null);
   };
 
   const handleBackToMenu = () => {
@@ -120,61 +172,97 @@ export default function GameController() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '20px', width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '800px', alignItems: 'center' }}>
-        <button 
-          onClick={handleBackToMenu}
-          style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            cursor: 'pointer',
-            backgroundColor: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px'
-          }}
-        >
-          ← Menu
-        </button>
-        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333' }}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      gap: '20px', 
+      padding: isFullscreen ? '0' : '20px', 
+      width: '100%',
+      height: isFullscreen ? '100vh' : 'auto',
+      justifyContent: isFullscreen ? 'center' : 'flex-start',
+      backgroundColor: isFullscreen ? '#222' : 'transparent'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        width: '100%', 
+        maxWidth: isFullscreen ? '90vh' : '800px', 
+        alignItems: 'center',
+        color: isFullscreen ? '#fff' : '#333'
+      }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={handleBackToMenu}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              backgroundColor: '#666',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px'
+            }}
+          >
+            ← Menu
+          </button>
+          <button 
+            onClick={toggleFullscreen}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              backgroundColor: '#444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px'
+            }}
+          >
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+        </div>
+        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isFullscreen ? '#fff' : '#333' }}>
           {gameMode === 'pvp' ? 'PvP' : `PvAI (Lvl ${difficulty})`}
         </div>
-        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: turn === 'w' ? '#d4a017' : '#333' }}>
+        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: turn === 'w' ? '#d4a017' : (isFullscreen ? '#ccc' : '#333') }}>
           Turn: {turn === 'w' ? 'White' : 'Black'}
         </div>
       </div>
       
-      <div style={{ position: 'relative', width: '100%', maxWidth: '800px' }}>
-        <ChessBoard
-          board={board}
-          selectedSquare={selectedSquare}
-          legalMoves={legalMoves}
-          onSquareClick={gameMode === 'ai' && turn === 'b' ? () => {} : handleSquareClick}
-        />
-        {gameStatus !== 'playing' && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            color: 'white',
-            padding: '20px 40px',
-            borderRadius: '8px',
-            fontSize: '2rem',
-            fontWeight: 'bold',
-            textAlign: 'center',
-            pointerEvents: 'none'
-          }}>
-            {gameStatus === 'checkmate' ? `Checkmate! ${turn === 'w' ? 'Black' : 'White'} Wins!` : 
-             gameStatus === 'stalemate' ? 'Stalemate!' : 
-             gameStatus === 'draw' ? 'Draw!' : ''}
-          </div>
-        )}
+      <div style={{ position: 'relative', width: '100%', maxWidth: isFullscreen ? '85vh' : '800px', display: 'flex', gap: '20px' }}>
+        <EvaluationBar evaluation={evaluation} mate={mate} />
+        <div style={{ flex: 1, aspectRatio: '1' }}>
+          <ChessBoard
+            board={board}
+            selectedSquare={selectedSquare}
+            legalMoves={legalMoves}
+            onSquareClick={gameMode === 'ai' && turn === 'b' ? () => {} : handleSquareClick}
+          />
+          {gameStatus !== 'playing' && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              color: 'white',
+              padding: '20px 40px',
+              borderRadius: '8px',
+              fontSize: '2rem',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              pointerEvents: 'none'
+            }}>
+              {gameStatus === 'checkmate' ? `Checkmate! ${turn === 'w' ? 'Black' : 'White'} Wins!` : 
+               gameStatus === 'stalemate' ? 'Stalemate!' : 
+               gameStatus === 'draw' ? 'Draw!' : ''}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-        {isAiThinking && <div style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#555' }}>AI is thinking...</div>}
+        {isAiThinking && <div style={{ fontStyle: 'italic', fontSize: '1.1rem', color: isFullscreen ? '#ccc' : '#555' }}>AI is thinking...</div>}
         {error && <div style={{ color: 'red' }}>{error}</div>}
         
         <button 

@@ -18,6 +18,12 @@ export interface Move {
   from: Square;
   to: Square;
   promotion?: PieceType;
+  isCastling?: boolean;
+}
+
+export interface CastlingRights {
+  w: { k: boolean, q: boolean };
+  b: { k: boolean, q: boolean };
 }
 
 export interface GameState {
@@ -28,4 +34,5 @@ export interface GameState {
   isStalemate: boolean;
   history: Move[];
   fen: string;
+  castlingRights: CastlingRights;
 }

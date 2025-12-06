@@ -1,4 +1,4 @@
-import { Board, Color, Piece, PieceType } from './types';
+import { Board, Color, Piece, PieceType, CastlingRights } from './types';
 
 export const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -45,7 +45,7 @@ export function fenToBoard(fen: string): Board {
   return board;
 }
 
-export function boardToFen(board: Board, turn: Color = 'w', castling = '-', enPassant = '-', halfMove = 0, fullMove = 1): string {
+export function boardToFen(board: Board, turn: Color = 'w', castlingRights?: CastlingRights | string, enPassant = '-', halfMove = 0, fullMove = 1): string {
   let fen = '';
   for (let row = 0; row < 8; row++) {
     let emptyCount = 0;
@@ -67,6 +67,18 @@ export function boardToFen(board: Board, turn: Color = 'w', castling = '-', enPa
     if (row < 7) {
       fen += '/';
     }
+  }
+
+  let castling = '-';
+  if (typeof castlingRights === 'string') {
+    castling = castlingRights;
+  } else if (castlingRights) {
+    castling = '';
+    if (castlingRights.w.k) castling += 'K';
+    if (castlingRights.w.q) castling += 'Q';
+    if (castlingRights.b.k) castling += 'k';
+    if (castlingRights.b.q) castling += 'q';
+    if (castling === '') castling = '-';
   }
 
   return `${fen} ${turn} ${castling} ${enPassant} ${halfMove} ${fullMove}`;
