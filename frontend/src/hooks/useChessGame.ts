@@ -1,0 +1,94 @@
+import { useState, useCallback, useEffect } from 'react';
+import { Board, Color, Move, Square, Piece } from '@/lib/chess/types';
+import { initialBoard, boardToFen, fenToBoard } from '@/lib/chess/board';
+import { getLegalMoves, makeMove, isCheckmate, isCheck, isSameSquare } from '@/lib/chess/rules';
+
+export function useChessGame() {
+  const [board, setBoard] = useState<Board>(initialBoard);
+  const [turn, setTurn] = useState<Color>('w');
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [legalMoves, setLegalMoves] = useState<Square[]>([]);
+  const [gameStatus, setGameStatus] = useState<'playing' | 'checkmate' | 'stalemate'>('playing');
+  const [history, setHistory] = useState<Move[]>([]);
+
+  const executeMove = useCallback((move: Move) => {
+    setBoard(prevBoard => {
+      const newBoard = makeMove(prevBoard, move);
+      
+      // Check for game over based on the NEW board
+      const nextTurn = turn === 'w' ? 'b' : 'w';
+      if (isCheckmate(newBoard, nextTurn)) {
+        setGameStatus('checkmate');
+      }
+      
+      return newBoard;
+    });
+    
+    setTurn(prev => prev === 'w' ? 'b' : 'w');
+    setHistory(prev => [...prev, move]);
+    setSelectedSquare(null);
+    setLegalMoves([]);
+  }, [turn]);
+
+  const handleSquareClick = useCallback((row: number, col: number) => {
+    if (gameStatus !== 'playing') return;
+
+    const clickedSquare: Square = { row, col };
+    const piece = board[row][col];
+
+    // If a square is already selected
+    if (selectedSquare) {
+      // If clicking the same square, deselect
+      if (isSameSquare(selectedSquare, clickedSquare)) {
+        setSelectedSquare(null);
+        setLegalMoves([]);
+        return;
+      }
+
+      // If clicking a legal move target, make the move
+      if (legalMoves.some(m => isSameSquare(m, clickedSquare))) {
+        const move: Move = { from: selectedSquare, to: clickedSquare };
+        executeMove(move);
+        return;
+      }
+
+      // If clicking another own piece, select it instead
+      if (piece && piece.color === turn) {
+        setSelectedSquare(clickedSquare);
+        setLegalMoves(getLegalMoves(board, clickedSquare));
+        return;
+      }
+
+      // If clicking empty or enemy piece (not a legal move), deselect
+      setSelectedSquare(null);
+      setLegalMoves([]);
+    } else {
+      // If no square selected, select own piece
+      if (piece && piece.color === turn) {
+        setSelectedSquare(clickedSquare);
+        setLegalMoves(getLegalMoves(board, clickedSquare));
+      }
+    }
+  }, [board, turn, selectedSquare, legalMoves, gameStatus, executeMove]);
+
+  const resetGame = useCallback(() => {
+    setBoard(initialBoard);
+    setTurn('w');
+    setSelectedSquare(null);
+    setLegalMoves([]);
+    setGameStatus('playing');
+    setHistory([]);
+  }, []);
+
+  return {
+    board,
+    turn,
+    selectedSquare,
+    legalMoves,
+    gameStatus,
+    handleSquareClick,
+    executeMove,
+    resetGame,
+    history
+  };
+}
