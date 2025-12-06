@@ -5,6 +5,7 @@ import { useChessGame } from '@/hooks/useChessGame';
 import ChessBoard from './ChessBoard';
 import EvaluationBar from './EvaluationBar';
 import { boardToFen, uciToMove } from '@/lib/chess/board';
+import styles from './GameController.module.css';
 
 type GameMode = 'menu' | 'pvp' | 'ai';
 
@@ -120,24 +121,13 @@ export default function GameController() {
 
   if (gameMode === 'menu') {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        gap: '30px', 
-        padding: '40px',
-        backgroundColor: '#f5f5f5',
-        borderRadius: '12px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        maxWidth: '500px',
-        width: '100%'
-      }}>
-        <h2 style={{ fontSize: '2rem', margin: 0, color: '#333' }}>Start New Game</h2>
+      <div className={styles.menuContainer}>
+        <h2 className={styles.menuTitle}>Start New Game</h2>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%' }}>
           <button 
             onClick={() => handleStartGame('pvp')}
-            style={menuButtonStyle}
+            className={styles.menuButton}
           >
             Player vs Player
           </button>
@@ -145,13 +135,13 @@ export default function GameController() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
             <button 
               onClick={() => handleStartGame('ai')}
-              style={menuButtonStyle}
+              className={styles.menuButton}
             >
               Player vs AI
             </button>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '10px', backgroundColor: '#eee', borderRadius: '8px' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', color: '#555', fontWeight: 'bold' }}>
+            <div className={styles.difficultyContainer}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', color: '#e0e0e0', fontWeight: 'bold' }}>
                 <span>AI Difficulty (Depth)</span>
                 <span>{difficulty}</span>
               </label>
@@ -161,9 +151,9 @@ export default function GameController() {
                 max="15" 
                 value={difficulty} 
                 onChange={(e) => setDifficulty(parseInt(e.target.value))}
-                style={{ width: '100%', cursor: 'pointer' }}
+                className={styles.rangeInput}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#777' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#aaa' }}>
                 <span>Easy</span>
                 <span>Hard</span>
               </div>
@@ -175,66 +165,33 @@ export default function GameController() {
   }
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      gap: '20px', 
-      padding: isFullscreen ? '0' : '20px', 
-      width: '100%',
-      height: isFullscreen ? '100vh' : 'auto',
-      justifyContent: isFullscreen ? 'center' : 'flex-start',
-      backgroundColor: isFullscreen ? '#222' : 'transparent'
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        width: '100%', 
-        maxWidth: isFullscreen ? '90vh' : '800px', 
-        alignItems: 'center',
-        color: isFullscreen ? '#fff' : '#333'
-      }}>
+    <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
+      <div className={`${styles.header} ${isFullscreen ? styles.headerFullscreen : ''}`}>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
             onClick={handleBackToMenu}
-            style={{
-              padding: '8px 16px',
-              fontSize: '14px',
-              cursor: 'pointer',
-              backgroundColor: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px'
-            }}
+            className={styles.button}
           >
             ← Menu
           </button>
           <button 
             onClick={toggleFullscreen}
-            style={{
-              padding: '8px 16px',
-              fontSize: '14px',
-              cursor: 'pointer',
-              backgroundColor: '#444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px'
-            }}
+            className={styles.button}
           >
             {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           </button>
         </div>
-        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isFullscreen ? '#fff' : '#333' }}>
+        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#4ecca3' }}>
           {gameMode === 'pvp' ? 'PvP' : `PvAI (Lvl ${difficulty})`}
         </div>
-        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: turn === 'w' ? '#d4a017' : (isFullscreen ? '#ccc' : '#333') }}>
+        <div className={`${styles.turnIndicator} ${turn === 'w' ? styles.turnWhite : styles.turnBlack}`}>
           Turn: {turn === 'w' ? 'White' : 'Black'}
         </div>
       </div>
       
-      <div style={{ position: 'relative', width: '100%', maxWidth: isFullscreen ? '85vh' : '800px', display: 'flex', gap: '20px' }}>
+      <div className={`${styles.gameArea} ${isFullscreen ? styles.gameAreaFullscreen : ''}`}>
         <EvaluationBar evaluation={evaluation} mate={mate} />
-        <div style={{ flex: 1, aspectRatio: '1' }}>
+        <div style={{ flex: 1, aspectRatio: '1', position: 'relative' }}>
           <ChessBoard
             board={board}
             selectedSquare={selectedSquare}
@@ -243,21 +200,7 @@ export default function GameController() {
             frozenPieces={frozenPieces}
           />
           {gameStatus !== 'playing' && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              backgroundColor: 'rgba(0,0,0,0.85)',
-              color: 'white',
-              padding: '20px 40px',
-              borderRadius: '8px',
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              textAlign: 'center',
-              pointerEvents: 'none',
-              zIndex: 10
-            }}>
+            <div className={styles.overlay}>
               {gameStatus === 'checkmate' ? `Checkmate! ${turn === 'w' ? 'Black' : 'White'} Wins!` : 
                gameStatus === 'stalemate' ? 'Stalemate!' : 
                gameStatus === 'king-captured' ? `King Captured! ${winner === 'w' ? 'White' : 'Black'} Wins!` : ''}
@@ -266,54 +209,31 @@ export default function GameController() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+      <div className={styles.controls}>
         {/* Spells */}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={() => activateSpell('freeze')}
             disabled={!spells[turn].freeze.available || (gameMode === 'ai' && turn === 'b')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: activeSpell === 'freeze' ? '#007bff' : (spells[turn].freeze.available ? '#17a2b8' : '#6c757d'),
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: spells[turn].freeze.available ? 'pointer' : 'not-allowed'
-            }}
+            className={`${styles.button} ${activeSpell === 'freeze' ? styles.buttonActive : ''}`}
           >
             Freeze {activeSpell === 'freeze' ? '(Select Target)' : ''}
           </button>
           <button
             onClick={() => activateSpell('ghost')}
             disabled={!spells[turn].ghost.available || (gameMode === 'ai' && turn === 'b')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: ghostMode ? '#28a745' : (spells[turn].ghost.available ? '#28a745' : '#6c757d'),
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: spells[turn].ghost.available ? 'pointer' : 'not-allowed',
-              opacity: ghostMode ? 1 : 0.8
-            }}
+            className={`${styles.button} ${ghostMode ? styles.buttonActive : ''}`}
           >
             Ghost Walk {ghostMode ? '(Active)' : ''}
           </button>
         </div>
 
-        {isAiThinking && <div style={{ fontStyle: 'italic', fontSize: '1.1rem', color: isFullscreen ? '#ccc' : '#555' }}>AI is thinking...</div>}
-        {error && <div style={{ color: 'red' }}>{error}</div>}
+        {isAiThinking && <div style={{ fontStyle: 'italic', fontSize: '1.1rem', color: '#aaa' }}>AI is thinking...</div>}
+        {error && <div style={{ color: '#e94560' }}>{error}</div>}
         
         <button 
           onClick={resetGame} 
-          style={{ 
-            padding: '10px 20px', 
-            fontSize: '16px', 
-            cursor: 'pointer',
-            backgroundColor: '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px'
-          }}
+          className={`${styles.button} ${styles.buttonDanger}`}
         >
           Reset Board
         </button>
@@ -322,15 +242,4 @@ export default function GameController() {
   );
 }
 
-const menuButtonStyle = {
-  padding: '15px',
-  fontSize: '1.1rem',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  backgroundColor: '#333',
-  color: 'white',
-  border: 'none',
-  borderRadius: '6px',
-  transition: 'background-color 0.2s',
-  width: '100%'
-} as React.CSSProperties;
+// Removed menuButtonStyle as it is now in CSS module
