@@ -9,9 +9,10 @@ interface ChessBoardProps {
   selectedSquare: Square | null;
   legalMoves: Square[];
   onSquareClick: (row: number, col: number) => void;
+  frozenPieces?: Map<string, number>;
 }
 
-export default function ChessBoard({ board, selectedSquare, legalMoves, onSquareClick }: ChessBoardProps) {
+export default function ChessBoard({ board, selectedSquare, legalMoves, onSquareClick, frozenPieces }: ChessBoardProps) {
   return (
     <div className={styles.board}>
       {board.map((row, rowIndex) => (
@@ -20,6 +21,7 @@ export default function ChessBoard({ board, selectedSquare, legalMoves, onSquare
           const square = { row: rowIndex, col: colIndex };
           const isSelected = selectedSquare ? isSameSquare(selectedSquare, square) : false;
           const isLegalMove = legalMoves.some(m => isSameSquare(m, square));
+          const isFrozen = frozenPieces?.has(`${rowIndex},${colIndex}`) && (frozenPieces.get(`${rowIndex},${colIndex}`) || 0) > 0;
 
           return (
             <Tile
@@ -28,6 +30,7 @@ export default function ChessBoard({ board, selectedSquare, legalMoves, onSquare
               isBlack={isBlack}
               isSelected={isSelected}
               isLegalMove={isLegalMove}
+              isFrozen={isFrozen}
               onClick={() => onSquareClick(rowIndex, colIndex)}
             />
           );

@@ -9,7 +9,10 @@ import { boardToFen, uciToMove } from '@/lib/chess/board';
 type GameMode = 'menu' | 'pvp' | 'ai';
 
 export default function GameController() {
-  const { board, turn, selectedSquare, legalMoves, gameStatus, handleSquareClick, executeMove, resetGame, castlingRights } = useChessGame();
+  const { 
+    board, turn, selectedSquare, legalMoves, gameStatus, handleSquareClick, executeMove, resetGame, castlingRights,
+    spells, activateSpell, activeSpell, ghostMode, winner, frozenPieces
+  } = useChessGame();
   const [gameMode, setGameMode] = useState<GameMode>('menu');
   const [difficulty, setDifficulty] = useState(10);
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -237,6 +240,7 @@ export default function GameController() {
             selectedSquare={selectedSquare}
             legalMoves={legalMoves}
             onSquareClick={gameMode === 'ai' && turn === 'b' ? () => {} : handleSquareClick}
+            frozenPieces={frozenPieces}
           />
           {gameStatus !== 'playing' && (
             <div style={{
@@ -251,17 +255,51 @@ export default function GameController() {
               fontSize: '2rem',
               fontWeight: 'bold',
               textAlign: 'center',
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              zIndex: 10
             }}>
               {gameStatus === 'checkmate' ? `Checkmate! ${turn === 'w' ? 'Black' : 'White'} Wins!` : 
                gameStatus === 'stalemate' ? 'Stalemate!' : 
-               gameStatus === 'draw' ? 'Draw!' : ''}
+               gameStatus === 'king-captured' ? `King Captured! ${winner === 'w' ? 'White' : 'Black'} Wins!` : ''}
             </div>
           )}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+        {/* Spells */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => activateSpell('freeze')}
+            disabled={!spells[turn].freeze.available || (gameMode === 'ai' && turn === 'b')}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: activeSpell === 'freeze' ? '#007bff' : (spells[turn].freeze.available ? '#17a2b8' : '#6c757d'),
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: spells[turn].freeze.available ? 'pointer' : 'not-allowed'
+            }}
+          >
+            Freeze {activeSpell === 'freeze' ? '(Select Target)' : ''}
+          </button>
+          <button
+            onClick={() => activateSpell('ghost')}
+            disabled={!spells[turn].ghost.available || (gameMode === 'ai' && turn === 'b')}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: ghostMode ? '#28a745' : (spells[turn].ghost.available ? '#28a745' : '#6c757d'),
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: spells[turn].ghost.available ? 'pointer' : 'not-allowed',
+              opacity: ghostMode ? 1 : 0.8
+            }}
+          >
+            Ghost Walk {ghostMode ? '(Active)' : ''}
+          </button>
+        </div>
+
         {isAiThinking && <div style={{ fontStyle: 'italic', fontSize: '1.1rem', color: isFullscreen ? '#ccc' : '#555' }}>AI is thinking...</div>}
         {error && <div style={{ color: 'red' }}>{error}</div>}
         

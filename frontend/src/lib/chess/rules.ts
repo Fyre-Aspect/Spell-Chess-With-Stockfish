@@ -29,7 +29,7 @@ export function isSquareAttacked(board: Board, sq: Square, attackerColor: Color)
   return false;
 }
 
-function getSlidingMoves(board: Board, start: Square, dr: number, dc: number): Square[] {
+function getSlidingMoves(board: Board, start: Square, dr: number, dc: number, ghostMode: boolean = false): Square[] {
   const moves: Square[] = [];
   const piece = getPieceAt(board, start);
   if (!piece) return moves;
@@ -47,7 +47,11 @@ function getSlidingMoves(board: Board, start: Square, dr: number, dc: number): S
       if (targetPiece.color !== piece.color) {
         moves.push(targetSq); // Capture
       }
-      break; // Blocked
+      
+      if (!ghostMode) {
+        break; // Blocked
+      }
+      // If ghostMode, continue even if blocked (but can't land on own piece, which is handled by not pushing above)
     }
     r += dr;
     c += dc;
@@ -135,7 +139,7 @@ function getKingMoves(board: Board, start: Square, castlingRights?: CastlingRigh
   return moves;
 }
 
-function getPawnMoves(board: Board, start: Square): Square[] {
+function getPawnMoves(board: Board, start: Square, ghostMode: boolean = false): Square[] {
   const moves: Square[] = [];
   const piece = getPieceAt(board, start);
   if (!piece) return moves;
@@ -145,11 +149,19 @@ function getPawnMoves(board: Board, start: Square): Square[] {
 
   // Forward 1
   const fwd1 = { row: start.row + direction, col: start.col };
-  if (isSquareOnBoard(fwd1) && !getPieceAt(board, fwd1)) {
+  const fwd1Blocked = isSquareOnBoard(fwd1) && !!getPieceAt(board, fwd1);
+  
+  if (isSquareOnBoard(fwd1) && !fwd1Blocked) {
     moves.push(fwd1);
-    // Forward 2
-    const fwd2 = { row: start.row + 2 * direction, col: start.col };
-    if (start.row === startRow && isSquareOnBoard(fwd2) && !getPieceAt(board, fwd2)) {
+  }
+
+  // Forward 2
+  const fwd2 = { row: start.row + 2 * direction, col: start.col };
+  if (start.row === startRow && isSquareOnBoard(fwd2)) {
+    const fwd2Blocked = !!getPieceAt(board, fwd2);
+    // Normal: Must be empty at fwd1 AND fwd2
+    // Ghost: Must be empty at fwd2 (destination), but fwd1 can be occupied
+    if (!fwd2Blocked && (!fwd1Blocked || ghostMode)) {
       moves.push(fwd2);
     }
   }
@@ -169,34 +181,44 @@ function getPawnMoves(board: Board, start: Square): Square[] {
   return moves;
 }
 
-export function getPseudoLegalMoves(board: Board, start: Square, castlingRights?: CastlingRights): Square[] {
+export function getPseudoLegalMoves(
+  board: Board, 
+  start: Square, 
+  castlingRights?: CastlingRights,
+  frozenPieces?: Set<string>,
+  ghostMode: boolean = false
+): Square[] {
   const piece = getPieceAt(board, start);
   if (!piece) return [];
 
+  if (frozenPieces && frozenPieces.has(`${start.row},${start.col}`)) {
+    return [];
+  }
+
   switch (piece.type) {
-    case 'p': return getPawnMoves(board, start);
+    case 'p': return getPawnMoves(board, start, ghostMode); // Pawns don't slide, so ghostMode logic needs to be added to getPawnMoves too?
     case 'n': return getKnightMoves(board, start);
     case 'b': return [
-      ...getSlidingMoves(board, start, -1, -1),
-      ...getSlidingMoves(board, start, -1, 1),
-      ...getSlidingMoves(board, start, 1, -1),
-      ...getSlidingMoves(board, start, 1, 1)
+      ...getSlidingMoves(board, start, -1, -1, ghostMode),
+      ...getSlidingMoves(board, start, -1, 1, ghostMode),
+      ...getSlidingMoves(board, start, 1, -1, ghostMode),
+      ...getSlidingMoves(board, start, 1, 1, ghostMode)
     ];
     case 'r': return [
-      ...getSlidingMoves(board, start, -1, 0),
-      ...getSlidingMoves(board, start, 1, 0),
-      ...getSlidingMoves(board, start, 0, -1),
-      ...getSlidingMoves(board, start, 0, 1)
+      ...getSlidingMoves(board, start, -1, 0, ghostMode),
+      ...getSlidingMoves(board, start, 1, 0, ghostMode),
+      ...getSlidingMoves(board, start, 0, -1, ghostMode),
+      ...getSlidingMoves(board, start, 0, 1, ghostMode)
     ];
     case 'q': return [
-      ...getSlidingMoves(board, start, -1, -1),
-      ...getSlidingMoves(board, start, -1, 1),
-      ...getSlidingMoves(board, start, 1, -1),
-      ...getSlidingMoves(board, start, 1, 1),
-      ...getSlidingMoves(board, start, -1, 0),
-      ...getSlidingMoves(board, start, 1, 0),
-      ...getSlidingMoves(board, start, 0, -1),
-      ...getSlidingMoves(board, start, 0, 1)
+      ...getSlidingMoves(board, start, -1, -1, ghostMode),
+      ...getSlidingMoves(board, start, -1, 1, ghostMode),
+      ...getSlidingMoves(board, start, 1, -1, ghostMode),
+      ...getSlidingMoves(board, start, 1, 1, ghostMode),
+      ...getSlidingMoves(board, start, -1, 0, ghostMode),
+      ...getSlidingMoves(board, start, 1, 0, ghostMode),
+      ...getSlidingMoves(board, start, 0, -1, ghostMode),
+      ...getSlidingMoves(board, start, 0, 1, ghostMode)
     ];
     case 'k': return getKingMoves(board, start, castlingRights);
     default: return [];
@@ -266,20 +288,28 @@ export function isCheck(board: Board, color: Color): boolean {
   return false;
 }
 
-export function getLegalMoves(board: Board, start: Square, castlingRights?: CastlingRights): Square[] {
+export function getLegalMoves(
+  board: Board, 
+  start: Square, 
+  castlingRights?: CastlingRights,
+  frozenPieces?: Set<string>,
+  ghostMode: boolean = false
+): Square[] {
   const piece = getPieceAt(board, start);
   if (!piece) return [];
 
-  const pseudoMoves = getPseudoLegalMoves(board, start, castlingRights);
+  const pseudoMoves = getPseudoLegalMoves(board, start, castlingRights, frozenPieces, ghostMode);
   const legalMoves: Square[] = [];
 
   for (const target of pseudoMoves) {
     const isCastling = piece.type === 'k' && Math.abs(target.col - start.col) > 1;
     const move: Move = { from: start, to: target, isCastling };
     const newBoard = makeMove(board, move);
-    if (!isCheck(newBoard, piece.color)) {
-      legalMoves.push(target);
-    }
+    
+    // "King can be killed" rule:
+    // We do NOT check if the move results in self-check.
+    // We allow the move.
+    legalMoves.push(target);
   }
 
   return legalMoves;

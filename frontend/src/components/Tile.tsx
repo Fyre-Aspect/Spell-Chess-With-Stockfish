@@ -8,14 +8,16 @@ interface TileProps {
   isBlack: boolean;
   isSelected: boolean;
   isLegalMove: boolean;
+  isFrozen?: boolean;
   onClick: () => void;
 }
 
-export default function Tile({ piece, isBlack, isSelected, isLegalMove, onClick }: TileProps) {
+export default function Tile({ piece, isBlack, isSelected, isLegalMove, isFrozen, onClick }: TileProps) {
   const classes = [
     styles.tile,
     isBlack ? styles.dark : styles.light,
     isSelected ? styles.selected : '',
+    isFrozen ? styles.frozen : '',
     isLegalMove ? (piece ? styles.legalCapture : styles.legalMove) : ''
   ].join(' ');
 

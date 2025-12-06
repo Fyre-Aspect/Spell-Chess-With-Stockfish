@@ -1,28 +1,68 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Board, Color, Move, Square, Piece, CastlingRights } from '@/lib/chess/types';
 import { initialBoard, boardToFen, fenToBoard } from '@/lib/chess/board';
-import { getLegalMoves, makeMove, isCheckmate, isCheck, isSameSquare } from '@/lib/chess/rules';
+import { getLegalMoves, makeMove, isCheckmate, isCheck, isSameSquare, findKing } from '@/lib/chess/rules';
+
+export interface SpellState {
+  freeze: { available: boolean };
+  ghost: { available: boolean };
+}
 
 export function useChessGame() {
   const [board, setBoard] = useState<Board>(initialBoard);
   const [turn, setTurn] = useState<Color>('w');
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
-  const [gameStatus, setGameStatus] = useState<'playing' | 'checkmate' | 'stalemate'>('playing');
+  const [gameStatus, setGameStatus] = useState<'playing' | 'checkmate' | 'stalemate' | 'king-captured'>('playing');
   const [history, setHistory] = useState<Move[]>([]);
   const [castlingRights, setCastlingRights] = useState<CastlingRights>({
     w: { k: true, q: true },
     b: { k: true, q: true }
   });
 
+  // Spells State
+  const [spells, setSpells] = useState<{ w: SpellState, b: SpellState }>({
+    w: { freeze: { available: true }, ghost: { available: true } },
+    b: { freeze: { available: true }, ghost: { available: true } }
+  });
+  const [frozenPieces, setFrozenPieces] = useState<Map<string, number>>(new Map()); // coord -> half-moves remaining
+  const [activeSpell, setActiveSpell] = useState<'freeze' | null>(null);
+  const [ghostMode, setGhostMode] = useState(false);
+  const [winner, setWinner] = useState<Color | null>(null);
+
+  const getFrozenSet = useCallback(() => {
+    const set = new Set<string>();
+    frozenPieces.forEach((turns, key) => {
+      if (turns > 0) set.add(key);
+    });
+    return set;
+  }, [frozenPieces]);
+
+  const activateSpell = useCallback((spell: 'freeze' | 'ghost') => {
+    if (!spells[turn][spell].available) return;
+    
+    if (spell === 'ghost') {
+      setGhostMode(true);
+      setSpells(prev => ({
+        ...prev,
+        [turn]: { ...prev[turn], ghost: { available: false } }
+      }));
+    } else if (spell === 'freeze') {
+      setActiveSpell('freeze');
+    }
+  }, [turn, spells]);
+
   const executeMove = useCallback((move: Move) => {
     setBoard(prevBoard => {
       const newBoard = makeMove(prevBoard, move);
       
-      // Check for game over based on the NEW board
-      const nextTurn = turn === 'w' ? 'b' : 'w';
-      if (isCheckmate(newBoard, nextTurn)) {
-        setGameStatus('checkmate');
+      // Check for King Capture (Game Over)
+      const opponentColor = turn === 'w' ? 'b' : 'w';
+      const opponentKing = findKing(newBoard, opponentColor);
+      
+      if (!opponentKing) {
+        setGameStatus('king-captured');
+        setWinner(turn);
       }
       
       return newBoard;
@@ -50,14 +90,46 @@ export function useChessGame() {
       return newRights;
     });
     
+    // Decrement frozen counters
+    setFrozenPieces(prev => {
+      const newMap = new Map();
+      prev.forEach((turns, key) => {
+        if (turns > 1) newMap.set(key, turns - 1);
+      });
+      return newMap;
+    });
+
+    // Reset Ghost Mode
+    if (ghostMode) {
+      setGhostMode(false);
+    }
+
     setTurn(prev => prev === 'w' ? 'b' : 'w');
     setHistory(prev => [...prev, move]);
     setSelectedSquare(null);
     setLegalMoves([]);
-  }, [turn, board]);
+  }, [turn, board, ghostMode]);
 
   const handleSquareClick = useCallback((row: number, col: number) => {
     if (gameStatus !== 'playing') return;
+
+    // Handle Freeze Spell Targeting
+    if (activeSpell === 'freeze') {
+      const piece = board[row][col];
+      if (piece) {
+        setFrozenPieces(prev => {
+          const newMap = new Map(prev);
+          newMap.set(`${row},${col}`, 4); // Freeze for 4 half-moves (2 turns)
+          return newMap;
+        });
+        setSpells(prev => ({
+          ...prev,
+          [turn]: { ...prev[turn], freeze: { available: false } }
+        }));
+        setActiveSpell(null);
+      }
+      return;
+    }
 
     const clickedSquare: Square = { row, col };
     const piece = board[row][col];
@@ -83,7 +155,7 @@ export function useChessGame() {
       // If clicking another own piece, select it instead
       if (piece && piece.color === turn) {
         setSelectedSquare(clickedSquare);
-        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights));
+        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights, getFrozenSet(), ghostMode));
         return;
       }
 
@@ -94,10 +166,10 @@ export function useChessGame() {
       // If no square selected, select own piece
       if (piece && piece.color === turn) {
         setSelectedSquare(clickedSquare);
-        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights));
+        setLegalMoves(getLegalMoves(board, clickedSquare, castlingRights, getFrozenSet(), ghostMode));
       }
     }
-  }, [board, turn, selectedSquare, legalMoves, gameStatus, executeMove, castlingRights]);
+  }, [board, turn, selectedSquare, legalMoves, gameStatus, executeMove, castlingRights, activeSpell, spells, getFrozenSet, ghostMode]);
 
   const resetGame = useCallback(() => {
     setBoard(initialBoard);
@@ -107,6 +179,14 @@ export function useChessGame() {
     setGameStatus('playing');
     setHistory([]);
     setCastlingRights({ w: { k: true, q: true }, b: { k: true, q: true } });
+    setSpells({
+      w: { freeze: { available: true }, ghost: { available: true } },
+      b: { freeze: { available: true }, ghost: { available: true } }
+    });
+    setFrozenPieces(new Map());
+    setGhostMode(false);
+    setWinner(null);
+    setActiveSpell(null);
   }, []);
 
   return {
@@ -119,6 +199,12 @@ export function useChessGame() {
     executeMove,
     resetGame,
     history,
-    castlingRights
+    castlingRights,
+    spells,
+    activateSpell,
+    activeSpell,
+    ghostMode,
+    winner,
+    frozenPieces
   };
 }
